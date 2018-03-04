@@ -239,10 +239,7 @@ static void update_ker_tags_rdisk_addr(struct boot_img_hdr *hdr, bool is_arm64)
 {
 	/* overwrite the destination of specified for the project */
 #ifdef ABOOT_IGNORE_BOOT_HEADER_ADDRS
-	if (is_arm64)
-		hdr->kernel_addr = ABOOT_FORCE_KERNEL64_ADDR;
-	else
-		hdr->kernel_addr = ABOOT_FORCE_KERNEL_ADDR;
+	hdr->kernel_addr = ABOOT_FORCE_KERNEL64_ADDR;
 	hdr->ramdisk_addr = ABOOT_FORCE_RAMDISK_ADDR;
 	hdr->tags_addr = ABOOT_FORCE_TAGS_ADDR;
 #endif
@@ -259,281 +256,6 @@ static void ptentry_to_tag(unsigned **ptr, struct ptentry *ptn)
 	atag_ptn.flags = ptn->flags;
 	memcpy(*ptr, &atag_ptn, sizeof(struct atag_ptbl_entry));
 	*ptr += sizeof(struct atag_ptbl_entry) / sizeof(unsigned);
-}
-
-unsigned char *update_cmdline(const char * cmdline)
-{
-	int cmdline_len = 0;
-	int have_cmdline = 0;
-	unsigned char *cmdline_final = NULL;
-	int pause_at_bootup = 0;
-	bool warm_boot = false;
-	bool gpt_exists = partition_gpt_exists();
-	int have_target_boot_params = 0;
-	char *boot_dev_buf = NULL;
-        bool is_mdtp_activated = 0;
-
-#ifdef MDTP_SUPPORT
-    mdtp_activated(&is_mdtp_activated);
-#endif /* MDTP_SUPPORT */
-
-	if (cmdline && cmdline[0]) {
-		cmdline_len = strlen(cmdline);
-		have_cmdline = 1;
-	}
-	if (target_is_emmc_boot()) {
-		cmdline_len += strlen(emmc_cmdline);
-#if UFS_SUPPORT || USE_BOOTDEV_CMDLINE
-		boot_dev_buf = (char *) malloc(sizeof(char) * BOOT_DEV_MAX_LEN);
-		ASSERT(boot_dev_buf);
-		platform_boot_dev_cmdline(boot_dev_buf);
-		cmdline_len += strlen(boot_dev_buf);
-#endif
-	}
-
-	cmdline_len += strlen(usb_sn_cmdline);
-	cmdline_len += strlen(sn_buf);
-
-	if (boot_into_recovery && gpt_exists)
-		cmdline_len += strlen(secondary_gpt_enable);
-
-	if (boot_into_ffbm) {
-		cmdline_len += strlen(androidboot_mode);
-		cmdline_len += strlen(ffbm_mode_string);
-		/* reduce kernel console messages to speed-up boot */
-		cmdline_len += strlen(loglevel);
-	} else if (boot_reason_alarm) {
-		cmdline_len += strlen(alarmboot_cmdline);
-	} else if (device.charger_screen_enabled &&
-			target_pause_for_battery_charge()) {
-		pause_at_bootup = 1;
-		cmdline_len += strlen(battchg_pause);
-	}
-
-	if(target_use_signed_kernel() && auth_kernel_img) {
-		cmdline_len += strlen(auth_kernel);
-	}
-
-	if (get_target_boot_params(cmdline, boot_into_recovery ? "recoveryfs" :
-								 "system",
-				   target_boot_params,
-				   sizeof(target_boot_params)) == 0) {
-		have_target_boot_params = 1;
-		cmdline_len += strlen(target_boot_params);
-	}
-
-	/* Determine correct androidboot.baseband to use */
-	switch(target_baseband())
-	{
-		case BASEBAND_APQ:
-			cmdline_len += strlen(baseband_apq);
-			break;
-
-		case BASEBAND_MSM:
-			cmdline_len += strlen(baseband_msm);
-			break;
-
-		case BASEBAND_CSFB:
-			cmdline_len += strlen(baseband_csfb);
-			break;
-
-		case BASEBAND_SVLTE2A:
-			cmdline_len += strlen(baseband_svlte2a);
-			break;
-
-		case BASEBAND_MDM:
-			cmdline_len += strlen(baseband_mdm);
-			break;
-
-		case BASEBAND_MDM2:
-			cmdline_len += strlen(baseband_mdm2);
-			break;
-
-		case BASEBAND_SGLTE:
-			cmdline_len += strlen(baseband_sglte);
-			break;
-
-		case BASEBAND_SGLTE2:
-			cmdline_len += strlen(baseband_sglte2);
-			break;
-
-		case BASEBAND_DSDA:
-			cmdline_len += strlen(baseband_dsda);
-			break;
-
-		case BASEBAND_DSDA2:
-			cmdline_len += strlen(baseband_dsda2);
-			break;
-	}
-
-	if (cmdline) {
-		if ((strstr(cmdline, DISPLAY_DEFAULT_PREFIX) == NULL) &&
-			target_display_panel_node(device.display_panel,
-			display_panel_buf, MAX_PANEL_BUF_SIZE) &&
-			strlen(display_panel_buf)) {
-			cmdline_len += strlen(display_panel_buf);
-		}
-	}
-
-	if (target_warm_boot()) {
-		warm_boot = true;
-		cmdline_len += strlen(warmboot_cmdline);
-	}
-
-	if (cmdline_len > 0) {
-		const char *src;
-		unsigned char *dst;
-
-		cmdline_final = (unsigned char*) malloc((cmdline_len + 4) & (~3));
-		ASSERT(cmdline_final != NULL);
-		memset((void *)cmdline_final, 0, sizeof(*cmdline_final));
-		dst = cmdline_final;
-
-		/* Save start ptr for debug print */
-		if (have_cmdline) {
-			src = cmdline;
-			while ((*dst++ = *src++));
-		}
-		if (target_is_emmc_boot()) {
-			src = emmc_cmdline;
-			if (have_cmdline) --dst;
-			have_cmdline = 1;
-			while ((*dst++ = *src++));
-#if UFS_SUPPORT  || USE_BOOTDEV_CMDLINE
-			src = boot_dev_buf;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-#endif
-		}
-
-		src = usb_sn_cmdline;
-		if (have_cmdline) --dst;
-		have_cmdline = 1;
-		while ((*dst++ = *src++));
-		src = sn_buf;
-		if (have_cmdline) --dst;
-		have_cmdline = 1;
-		while ((*dst++ = *src++));
-		if (warm_boot) {
-			if (have_cmdline) --dst;
-			src = warmboot_cmdline;
-			while ((*dst++ = *src++));
-		}
-
-		if (boot_into_recovery && gpt_exists) {
-			src = secondary_gpt_enable;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		}
-
-		if (boot_into_ffbm) {
-			src = androidboot_mode;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-			src = ffbm_mode_string;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-			src = loglevel;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		} else if (boot_reason_alarm) {
-			src = alarmboot_cmdline;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		} else if (pause_at_bootup) {
-			src = battchg_pause;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		}
-
-		if(target_use_signed_kernel() && auth_kernel_img) {
-			src = auth_kernel;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		}
-
-		switch(target_baseband())
-		{
-			case BASEBAND_APQ:
-				src = baseband_apq;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_MSM:
-				src = baseband_msm;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_CSFB:
-				src = baseband_csfb;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_SVLTE2A:
-				src = baseband_svlte2a;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_MDM:
-				src = baseband_mdm;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_MDM2:
-				src = baseband_mdm2;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_SGLTE:
-				src = baseband_sglte;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_SGLTE2:
-				src = baseband_sglte2;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_DSDA:
-				src = baseband_dsda;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-
-			case BASEBAND_DSDA2:
-				src = baseband_dsda2;
-				if (have_cmdline) --dst;
-				while ((*dst++ = *src++));
-				break;
-		}
-
-		if (strlen(display_panel_buf)) {
-			src = display_panel_buf;
-			if (have_cmdline) --dst;
-			while ((*dst++ = *src++));
-		}
-
-		if (have_target_boot_params) {
-			if (have_cmdline) --dst;
-			src = target_boot_params;
-			while ((*dst++ = *src++));
-		}
-	}
-
-
-	if (boot_dev_buf)
-		free(boot_dev_buf);
-
-	dprintf(INFO, "cmdline: %s\n", cmdline_final ? cmdline_final : "");
-	return cmdline_final;
 }
 
 unsigned *atag_core(unsigned *ptr)
@@ -700,28 +422,6 @@ void boot_linux(void *kernel, unsigned *tags,
 
 	ramdisk = PA(ramdisk);
 
-	final_cmdline = update_cmdline((const char*)cmdline);
-
-#if DEVICE_TREE
-	dprintf(INFO, "Updating device tree: start\n");
-
-	mac = generate_mac_address();
-
-	/* Update the Device Tree */
-	ret = update_device_tree((void *)tags, final_cmdline, ramdisk, ramdisk_size, mac);
-	if(ret)
-	{
-		dprintf(CRITICAL, "ERROR: Updating Device Tree Failed \n");
-		ASSERT(0);
-	}
-	dprintf(INFO, "Updating device tree: done\n");
-#else
-	/* Generating the Atags */
-	generate_atags(tags, final_cmdline, ramdisk, ramdisk_size);
-#endif
-
-	free(final_cmdline);
-
 	/* Perform target specific cleanup */
 	target_uninit();
 
@@ -730,9 +430,7 @@ void boot_linux(void *kernel, unsigned *tags,
 	target_display_shutdown();
 #endif
 
-
-	dprintf(INFO, "booting linux @ %p, ramdisk @ %p (%d), tags/device tree @ %p\n",
-		entry, ramdisk, ramdisk_size, tags_phys);
+	dprintf(INFO, "Booting UEFI FD @ %p\n", entry);
 
 	enter_critical_section();
 
@@ -746,12 +444,8 @@ void boot_linux(void *kernel, unsigned *tags,
 #endif
 	bs_set_timestamp(BS_KERNEL_ENTRY);
 
-	if (IS_ARM64(kptr))
-		/* Jump to a 64bit kernel */
-		scm_elexec_call((paddr_t)kernel, tags_phys);
-	else
-		/* Jump to a 32bit kernel */
-		entry(0, machtype, (unsigned*)tags_phys);
+	/* Jump to a 64bit kernel */
+	scm_elexec_call((paddr_t)kernel, 0u);
 }
 
 /* Function to check if the memory address range falls within the aboot
@@ -893,7 +587,7 @@ int boot_linux_from_mmc(void)
 		if (rcode <= 0) {
 			boot_into_ffbm = false;
 			if (rcode < 0)
-				dprintf(CRITICAL,"failed to get ffbm cookie");
+				dprintf(CRITICAL,"failed to get ffbm cookie\n");
 		} else
 			boot_into_ffbm = true;
 	} else
