@@ -79,7 +79,6 @@ void kmain(void)
 
 	dprintf(INFO, "BUILD_VERSION=%s\n", BUILD_VERSION);
 	dprintf(INFO, "BUILD_DATE=%s - %s\n", __TIME__, __DATE__);
-	dprintf(INFO, "welcome to lk\n\n");
 	bs_set_timestamp(BS_BL_START);
 
 	// deal with any static constructors

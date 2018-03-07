@@ -1368,6 +1368,9 @@ static int populate_simplefb_node(void *fdt)
 		return offset;
 	}
 
+	dprintf(INFO, "%s: FrameBuffer@%x, width = %d, height = %d, stride = %d, format = %s\n", 
+		__func__, fb->base, fb->width, fb->height, fb->stride * fb->bpp / 8, format);
+
 	snprintf(name, sizeof(name), "framebuffer@%x", fb->base);
 	ret = fdt_set_name(fdt, offset, name);
 	if (ret < 0) {

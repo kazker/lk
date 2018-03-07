@@ -164,6 +164,40 @@ static void mdss_source_pipe_config(struct fbcon_config *fb, struct msm_panel_in
 	writel(fb_off, pipe_base + PIPE_SSPP_SRC_XY);
 	writel(0x00, pipe_base + PIPE_SSPP_OUT_XY);
 
+	/* How to get this magic number:
+		((bpc_a) << MDP5_PIPE_SRC_FORMAT_A_BPC__SHIFT) & MDP5_PIPE_SRC_FORMAT_A_BPC__MASK |
+		((bpc_r) << MDP5_PIPE_SRC_FORMAT_R_BPC__SHIFT) & MDP5_PIPE_SRC_FORMAT_R_BPC__MASK |
+		((bpc_g) << MDP5_PIPE_SRC_FORMAT_G_BPC__SHIFT) & MDP5_PIPE_SRC_FORMAT_G_BPC__MASK |
+		((bpc_b) << MDP5_PIPE_SRC_FORMAT_B_BPC__SHIFT) & MDP5_PIPE_SRC_FORMAT_B_BPC__MASK |
+		(alpha_enable) ? 0x00000100 : 0x0 |
+		((cpp) << MDP5_PIPE_SRC_FORMAT_CPP__SHIFT) & MDP5_PIPE_SRC_FORMAT_CPP__MASK |
+		((unpack_count) << MDP5_PIPE_SRC_FORMAT_UNPACK_COUNT__SHIFT) & MDP5_PIPE_SRC_FORMAT_UNPACK_COUNT__MASK |
+		(unpack_tight) ? 0x00020000 : 0x0 |
+		((fetch_type) << MDP5_PIPE_SRC_FORMAT_FETCH_TYPE__SHIFT) & MDP5_PIPE_SRC_FORMAT_FETCH_TYPE__MASK |
+		((chroma_sample) << MDP5_PIPE_SRC_FORMAT_CHROMA_SAMP__SHIFT) & MDP5_PIPE_SRC_FORMAT_CHROMA_SAMP__MASK
+
+		((bpc_a) << 6) & 0x000000c0 |
+		((bpc_r) << 4) & 0x00000030 |
+		((bpc_g) << 0) & 0x00000003 |
+		((bpc_b) << 2) & 0x0000000c |
+		(alpha_enable ? 0x00000100 : 0x0) |
+		((cpp) << 9) & 0x00000600 |
+		((unpack_count) << 12) & 0x00003000 |
+		(unpack_tight ? 0x00020000 : 0x0) |
+		((fetch_type) << 19) & 0x00180000 |
+		((chroma_sample) << 23) & 0x01800000
+
+		((unpack0) << MDP5_PIPE_SRC_UNPACK_ELEM0__SHIFT) & MDP5_PIPE_SRC_UNPACK_ELEM0__MASK |
+		((unpack1) << MDP5_PIPE_SRC_UNPACK_ELEM1__SHIFT) & MDP5_PIPE_SRC_UNPACK_ELEM1__MASK |
+		((unpack2) << MDP5_PIPE_SRC_UNPACK_ELEM2__SHIFT) & MDP5_PIPE_SRC_UNPACK_ELEM2__MASK |
+		((unpack3) << MDP5_PIPE_SRC_UNPACK_ELEM3__SHIFT) & MDP5_PIPE_SRC_UNPACK_ELEM3__MASK
+
+		((unpack0) << 0) & 0x000000ff |
+		((unpack1) << 8) & 0x0000ff00 |
+		((unpack2) << 16) & 0x00ff0000 |
+		((unpack3) << 24) & 0xff000000
+	*/
+
 	switch (fb->bpp) {
 	case 16:
 		/* Tight Packing 3bpp 0-Alpha 8-bit R B G */
@@ -177,8 +211,9 @@ static void mdss_source_pipe_config(struct fbcon_config *fb, struct msm_panel_in
 		writel(0x00020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
 		break;
 	case 32:
+		/* Windows requires a BGRA FB */
 		writel(0x000236FF, pipe_base + PIPE_SSPP_SRC_FORMAT);
-		writel(0x03010002, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
+		writel(0x03020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
 		break;
 	}
 
@@ -797,6 +832,9 @@ int mdp_dsi_video_config(struct msm_panel_info *pinfo,
 	writel(0x1111, MDP_VIDEO_INTF_UNDERFLOW_CTL);
 	writel(0x01, MDP_UPPER_NEW_ROI_PRIOR_RO_START);
 	writel(0x01, MDP_LOWER_NEW_ROI_PRIOR_TO_START);
+
+	dprintf(INFO, "%s: FrameBuffer@%x, width = %d, height = %d, stride = %d, format = %d\n", 
+		__func__, fb->base, fb->width, fb->height, fb->stride * fb->bpp / 8, fb->format);
 
 	return 0;
 }

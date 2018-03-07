@@ -58,15 +58,15 @@
                            MMU_MEMORY_AP_READ_WRITE | MMU_MEMORY_XN)
 
 static mmu_section_t mmu_section_table[] = {
-/*           Physical addr,     Virtual addr,     Size (in MB),     Flags */
-	{    MEMBASE,           MEMBASE,          (MEMSIZE / MB),   LK_MEMORY},
-	{    MSM_IOMAP_BASE,    MSM_IOMAP_BASE,   MSM_IOMAP_SIZE,   IOMAP_MEMORY},
-	{    A53_SS_BASE,       A53_SS_BASE,      A53_SS_SIZE,      IOMAP_MEMORY},
-	{    SYSTEM_IMEM_BASE,  SYSTEM_IMEM_BASE, 1,                COMMON_MEMORY},
-	{    MSM_SHARED_BASE,   MSM_SHARED_BASE,  1,                COMMON_MEMORY},
-	{    MIPI_FB_ADDR,      MIPI_FB_ADDR,     10,              COMMON_MEMORY},
-	{    SCRATCH_ADDR,      SCRATCH_ADDR,     256,              SCRATCH_MEMORY},
-        {    RPMB_SND_RCV_BUF,      RPMB_SND_RCV_BUF,        RPMB_SND_RCV_BUF_SZ,    IOMAP_MEMORY},
+	/*   Physical addr,     Virtual addr,     Size (in MB),     		Flags */
+	{    MEMBASE,           MEMBASE,          (MEMSIZE / MB),   		LK_MEMORY},
+	{    MSM_IOMAP_BASE,    MSM_IOMAP_BASE,   MSM_IOMAP_SIZE,   		IOMAP_MEMORY},
+	{    A53_SS_BASE,       A53_SS_BASE,      A53_SS_SIZE,      		IOMAP_MEMORY},
+	{    SYSTEM_IMEM_BASE,  SYSTEM_IMEM_BASE, 1,                		COMMON_MEMORY},
+	{    MSM_SHARED_BASE,   MSM_SHARED_BASE,  1,                		COMMON_MEMORY},
+	{    MIPI_FB_ADDR,      MIPI_FB_ADDR,     10,              			COMMON_MEMORY},
+	{    SCRATCH_ADDR,      SCRATCH_ADDR,     256,              		SCRATCH_MEMORY},
+	{    RPMB_SND_RCV_BUF,  RPMB_SND_RCV_BUF, RPMB_SND_RCV_BUF_SZ,    	IOMAP_MEMORY},
 };
 
 
@@ -123,11 +123,11 @@ void platform_init_mmu_mappings(void)
 	uint32_t table_size = ARRAY_SIZE(mmu_section_table);
 	uint32_t ddr_start = get_ddr_start();
 
-	/*Mapping the ddr start address for loading the kernel about 90 MB*/
-	sections = 90;
+	/*Mapping the ddr start address for loading the UEFI about 150 MB*/
+	sections = 150;
 	while(sections--)
 	{
-		arm_mmu_map_section(ddr_start + sections * MB, ddr_start + sections* MB, COMMON_MEMORY);
+		arm_mmu_map_section(ddr_start + sections * MB, ddr_start + sections * MB, COMMON_MEMORY);
 	}
 	/* Configure the MMU page entries for memory read from the
 	   mmu_section_table */
