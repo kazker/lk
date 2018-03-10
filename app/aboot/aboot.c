@@ -551,9 +551,12 @@ int boot_linux_from_mmc(void)
 	unsigned offset = 0;
 	int rcode;
 	unsigned long long ptn = 0;
+	unsigned long long varptn = 0;
 	int index = INVALID_PTN;
+	int varindex = INVALID_PTN;
 
 	unsigned char *image_addr = 0;
+	unsigned char *var_addr = 0;
 	unsigned kernel_actual;
 	unsigned ramdisk_actual;
 	unsigned imagesize_actual;
@@ -602,8 +605,14 @@ int boot_linux_from_mmc(void)
 		index = partition_get_index("boot");
 		ptn = partition_get_offset(index);
 		if(ptn == 0) {
-			dprintf(CRITICAL, "ERROR: No boot partition found\n");
-                    return -1;
+			dprintf(CRITICAL, "ERROR: No UEFI FD partition found\n");
+			return -1;
+		}
+		varindex = partition_get_index("uefivar");
+		varptn = partition_get_offset(varindex);
+		if (varptn == 0) {
+			dprintf(CRITICAL, "ERROR: No UEFI variable partition found\n");
+			return -1;
 		}
 	}
 	else {
@@ -616,12 +625,12 @@ int boot_linux_from_mmc(void)
 	}
 
 	if (mmc_read(ptn + offset, (unsigned int *) buf, page_size)) {
-		dprintf(CRITICAL, "ERROR: Cannot read boot image header\n");
+		dprintf(CRITICAL, "ERROR: Cannot read UEFI FD header\n");
                 return -1;
 	}
 
 	if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-		dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
+		dprintf(CRITICAL, "ERROR: Invalid UEFI FD header\n");
                 return -1;
 	}
 
@@ -642,6 +651,7 @@ int boot_linux_from_mmc(void)
 	ramdisk_actual = ROUND_TO_PAGE(hdr->ramdisk_size, page_mask);
 
 	image_addr = (unsigned char *)target_get_scratch_address();
+	var_addr = (unsigned char *)target_get_uefi_var_address();
 
 #if DEVICE_TREE
 	dt_actual = ROUND_TO_PAGE(hdr->dt_size, page_mask);
@@ -652,7 +662,7 @@ int boot_linux_from_mmc(void)
 
 	if (check_aboot_addr_range_overlap((uint32_t) image_addr, imagesize_actual))
 	{
-		dprintf(CRITICAL, "Boot image buffer address overlaps with aboot addresses.\n");
+		dprintf(CRITICAL, "UEFI FD buffer address overlaps with aboot addresses.\n");
 		return -1;
 	}
 
@@ -666,64 +676,45 @@ int boot_linux_from_mmc(void)
 	 * 4. Sanity Check on kernel_addr and ramdisk_addr and copy data.
 	 */
 
-	dprintf(INFO, "Loading boot image (%d): start\n", imagesize_actual);
+	dprintf(INFO, "Loading UEFI FD (%d): start\n", imagesize_actual);
 	bs_set_timestamp(BS_KERNEL_LOAD_START);
 
 	/* Read image without signature */
 	if (mmc_read(ptn + offset, (void *)image_addr, imagesize_actual))
 	{
-		dprintf(CRITICAL, "ERROR: Cannot read boot image\n");
+		dprintf(CRITICAL, "ERROR: Cannot read UEFI FD\n");
 		return -1;
 	}
 
-	dprintf(INFO, "Loading boot image (%d): done\n", imagesize_actual);
+	/* Read UEFI variables */
+	if (mmc_read(varptn, (void*) var_addr, UEFI_VAR_SIZE))
+	{
+		dprintf(CRITICAL, "ERROR: Cannot read UEFI variable\n");
+		return -1;
+	}
+
+	dprintf(INFO, "Loading UEFI FD (%d): done\n", imagesize_actual);
 	bs_set_timestamp(BS_KERNEL_LOAD_DONE);
 
-	/* Authenticate Kernel */
-	dprintf(INFO, "use_signed_kernel=%d, is_unlocked=%d, is_tampered=%d.\n",
-		(int) target_use_signed_kernel(),
-		device.is_unlocked,
-		device.is_tampered);
-
-	if(target_use_signed_kernel() && (!device.is_unlocked))
-	{
-		offset = imagesize_actual;
-		if (check_aboot_addr_range_overlap((uint32_t)image_addr + offset, page_size))
-		{
-			dprintf(CRITICAL, "Signature read buffer address overlaps with aboot addresses.\n");
-			return -1;
-		}
-
-		/* Read signature */
-		if(mmc_read(ptn + offset, (void *)(image_addr + offset), page_size))
-		{
-			dprintf(CRITICAL, "ERROR: Cannot read boot image signature\n");
-			return -1;
-		}
-
-	} else {
-		second_actual  = ROUND_TO_PAGE(hdr->second_size,  page_mask);
-		#ifdef TZ_SAVE_KERNEL_HASH
-		aboot_save_boot_hash_mmc((uint32_t) image_addr, imagesize_actual);
-		#endif /* TZ_SAVE_KERNEL_HASH */
+	second_actual  = ROUND_TO_PAGE(hdr->second_size,  page_mask);
+#ifdef TZ_SAVE_KERNEL_HASH
+	aboot_save_boot_hash_mmc((uint32_t) image_addr, imagesize_actual);
+#endif /* TZ_SAVE_KERNEL_HASH */
 
 #ifdef MDTP_SUPPORT
-		{
-			/* Verify MDTP lock.
-			 * For boot & recovery partitions, MDTP will use boot_verifier APIs,
-			 * since verification was skipped in aboot. The signature is not part of the loaded image.
-			 */
-			mdtp_ext_partition_verification_t ext_partition;
-			ext_partition.partition = boot_into_recovery ? MDTP_PARTITION_RECOVERY : MDTP_PARTITION_BOOT;
-			ext_partition.integrity_state = MDTP_PARTITION_STATE_UNSET;
-			ext_partition.page_size = page_size;
-			ext_partition.image_addr = (uint32)image_addr;
-			ext_partition.image_size = imagesize_actual;
-			ext_partition.sig_avail = FALSE;
-			mdtp_fwlock_verify_lock(&ext_partition);
-		}
+	/* Verify MDTP lock.
+		* For boot & recovery partitions, MDTP will use boot_verifier APIs,
+		* since verification was skipped in aboot. The signature is not part of the loaded image.
+		*/
+	mdtp_ext_partition_verification_t ext_partition;
+	ext_partition.partition = boot_into_recovery ? MDTP_PARTITION_RECOVERY : MDTP_PARTITION_BOOT;
+	ext_partition.integrity_state = MDTP_PARTITION_STATE_UNSET;
+	ext_partition.page_size = page_size;
+	ext_partition.image_addr = (uint32)image_addr;
+	ext_partition.image_size = imagesize_actual;
+	ext_partition.sig_avail = FALSE;
+	mdtp_fwlock_verify_lock(&ext_partition);
 #endif /* MDTP_SUPPORT */
-	}
 
 	/*
 	 * Check if the kernel image is a gzip package. If yes, need to decompress it.

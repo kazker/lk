@@ -79,6 +79,11 @@ void *target_get_scratch_address(void)
 	return ((void *)SCRATCH_ADDR);
 }
 
+void *target_get_uefi_var_address(void)
+{
+	return ((void *)UEFI_VAR_ADDR);
+}
+
 unsigned target_get_max_flash_size(void)
 {
 	return (256 * 1024 * 1024);

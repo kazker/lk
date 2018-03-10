@@ -44,6 +44,9 @@ void target_init(void);
 /* get memory address for fastboot image loading */
 void *target_get_scratch_address(void);
 
+/* get memory address for UEFI variables */
+void *target_get_uefi_var_address(void);
+
 /* get the max allowed flash size */
 unsigned target_get_max_flash_size(void);
 
