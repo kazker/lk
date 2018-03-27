@@ -364,9 +364,25 @@ static void mdss_source_pipe_config(struct fbcon_config *fb, struct msm_panel_in
 	writel(src_xy, pipe_base + PIPE_SSPP_SRC_XY);
 	writel(dst_xy, pipe_base + PIPE_SSPP_OUT_XY);
 
-	/* Tight Packing 3bpp 0-Alpha 8-bit R B G */
-	writel(0x0002243F, pipe_base + PIPE_SSPP_SRC_FORMAT);
-	writel(0x00020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
+	switch (fb->bpp) {
+	case 16:
+		/* Tight Packing 3bpp 0-Alpha 8-bit R B G */
+		writel(0x00022216, pipe_base + PIPE_SSPP_SRC_FORMAT);
+		writel(0x00020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
+		break;
+	default:
+	case 24:
+		/* Tight Packing 3bpp 0-Alpha 8-bit R B G */
+		writel(0x0002243F, pipe_base + PIPE_SSPP_SRC_FORMAT);
+		writel(0x00020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
+		break;
+	case 32:
+		/* Windows requires a BGRA FB */
+		writel(0x000236FF, pipe_base + PIPE_SSPP_SRC_FORMAT);
+		writel(0x03020001, pipe_base + PIPE_SSPP_SRC_UNPACK_PATTERN);
+		break;
+	}
+
 
 	if (target_is_yuv_format(fb->format)) {
 		writel(0x0082B23F, pipe_base + PIPE_SSPP_SRC_FORMAT);

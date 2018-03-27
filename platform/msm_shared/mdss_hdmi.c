@@ -1169,8 +1169,12 @@ static int mdss_hdmi_update_panel_info(void)
 	panel.fb.width   = panel.panel_info.xres;
 	panel.fb.height  = panel.panel_info.yres;
 	panel.fb.stride  = panel.panel_info.xres;
-	panel.fb.bpp     = panel.panel_info.bpp;
-	panel.fb.format  = FB_FORMAT_RGB888;
+	if (panel.panel_info.bpp != 32)
+	{
+		dprintf(ALWAYS, "32bpp is set for UEFI environment.\n");
+		panel.fb.bpp = 32;
+	}
+	panel.fb.format  = FB_FORMAT_RGB8888;
 
 	dprintf(ALWAYS, "Panel information: width: %d, height: %d, stride: %d, BPP: %d\n", 
 		panel.fb.width, panel.fb.height, panel.fb.stride, panel.fb.bpp);

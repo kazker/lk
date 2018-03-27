@@ -391,6 +391,7 @@ void fbcon_setup(struct fbcon_config *_config)
 		fb_color_formats = fb_color_formats_555;
 		break;
         case FB_FORMAT_RGB888:
+		case FB_FORMAT_RGB8888:
 		fb_color_formats = fb_color_formats_888;
                 break;
 	default:

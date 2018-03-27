@@ -88,7 +88,7 @@ void kmain(void)
                         (((marker_value % TIMER_KHZ)
                         * 1000) / TIMER_KHZ));
 
-	dprintf(INFO, "welcome to lk\n\n");
+	dprintf(INFO, "UEFI Bootstrapper (Powered by Little Kernel)\n\n");
 	bs_set_timestamp(BS_BL_START);
 
 	// deal with any static constructors
