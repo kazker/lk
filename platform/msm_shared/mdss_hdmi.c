@@ -1143,19 +1143,37 @@ static int mdss_hdmi_update_panel_info(void)
 	mdss_hdmi_set_mode(true);
 
 	if (!mdss_hdmi_read_edid())
+	{
+		dprintf(ALWAYS, "Read HDMI EDID report.\n");
 		mdss_hdmi_parse_res();
+	}
 	else
+	{
+		dprintf(ALWAYS, "EDID report failed. Fallback to default resolution.\n");
 		mdss_hdmi_video_fmt = DEFAULT_RESOLUTION;
+	}
 
 	mdss_hdmi_set_mode(false);
-
 	mdss_hdmi_panel_init(&(panel.panel_info));
+
+	// Sanity check here
+	if (panel.panel_info.xres < 1280 ||
+		panel.panel_info.yres < 720)
+	{
+		dprintf(ALWAYS, "EDID report is too low. Fallback to default resolution.\n");
+		mdss_hdmi_video_fmt = DEFAULT_RESOLUTION;
+		mdss_hdmi_set_mode(false);
+		mdss_hdmi_panel_init(&(panel.panel_info));
+	}
 
 	panel.fb.width   = panel.panel_info.xres;
 	panel.fb.height  = panel.panel_info.yres;
 	panel.fb.stride  = panel.panel_info.xres;
 	panel.fb.bpp     = panel.panel_info.bpp;
 	panel.fb.format  = FB_FORMAT_RGB888;
+
+	dprintf(ALWAYS, "Panel information: width: %d, height: %d, stride: %d, BPP: %d\n", 
+		panel.fb.width, panel.fb.height, panel.fb.stride, panel.fb.bpp);
 
 	return NO_ERROR;
 }

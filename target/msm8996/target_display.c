@@ -894,6 +894,7 @@ void target_display_init(const char *panel_name)
 			oem.panel);
 		goto target_display_init_end;
 	} else if (!strcmp(oem.panel, HDMI_PANEL_NAME)) {
+		dprintf(ALWAYS, "Initialize HDMI panel.\n");
 		mdss_hdmi_display_init(MDP_REV_50, (void *) HDMI_FB_ADDR);
 		goto target_display_init_end;
 	} else if (!strcmp(oem.panel, "dual_720p_single_hdmi_video")) {
