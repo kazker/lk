@@ -1351,7 +1351,7 @@ int qseecom_tz_init()
 	req.qsee_cmd_id = QSEE_APP_REGION_NOTIFICATION;
 	req.addr = APP_REGION_ADDR;
 	req.size = APP_REGION_SIZE;
-	dprintf(ALWAYS, "secure app region addr=0x%x size=0x%x",
+	dprintf(ALWAYS, "secure app region addr=0x%x size=0x%x\n",
 					req.addr, req.size);
 	rc = qseecom_scm_call(SCM_SVC_TZSCHEDULER, 1,
 			&req, sizeof(req),
