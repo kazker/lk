@@ -2952,10 +2952,7 @@ void cmd_flash_mmc_img(const char *arg, void *data, unsigned sz)
 			if (!strncmp(pname, "boot", strlen("boot"))
 					|| !strcmp(pname, "recovery"))
 			{
-				if (memcmp((void *)data, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-					fastboot_fail("image is not a boot image");
-					return;
-				}
+				/* We do not check boot image */
 
 				/* Reset multislot_partition attributes in case of flashing boot */
 				if (partition_multislot_is_supported())
@@ -3513,14 +3510,7 @@ void cmd_flash_nand(const char *arg, void *data, unsigned sz)
 		return;
 	}
 
-	if (!strcmp(ptn->name, "boot") || !strcmp(ptn->name, "recovery")) {
-		if((sz > BOOT_MAGIC_SIZE) && (!memcmp((void *)data, BOOT_MAGIC, BOOT_MAGIC_SIZE))) {
-			dprintf(INFO, "Verified the BOOT_MAGIC in image header  \n");
-		} else {
-			fastboot_fail("Image is not a boot image");
-			return;
-		}
-	}
+	/* We do not check boot image */
 
 	if (!strcmp(ptn->name, "system")
 		|| !strcmp(ptn->name, "userdata")
@@ -4455,11 +4445,13 @@ void aboot_init(const struct app_descriptor *app)
 		page_mask = page_size - 1;
 		mmc_blocksize = mmc_get_device_blocksize();
 		mmc_blocksize_mask = mmc_blocksize - 1;
+		dprintf(ALWAYS, "Target is eMMC Boot, page size = %d\n", page_size);
 	}
 	else
 	{
 		page_size = flash_page_size();
 		page_mask = page_size - 1;
+		dprintf(ALWAYS, "Target is Flash Boot, page size = %d\n", page_size);
 	}
 	ASSERT((MEMBASE + MEMSIZE) > MEMBASE);
 

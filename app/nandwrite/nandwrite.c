@@ -105,12 +105,7 @@ void handle_flash(const char *name, unsigned addr, unsigned sz)
 		return;
 	}
 
-	if (!strcmp(ptn->name, "boot") || !strcmp(ptn->name, "recovery")) {
-		if (memcmp((void *)data, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-			jtag_fail("image is not a boot image");
-			return;
-		}
-	}
+	/* We do not check boot image */
 
 	if (!strcmp(ptn->name, "system") || !strcmp(ptn->name, "userdata") || !strcmp(ptn->name, "persist"))
 		extra = ((page_size >> 9) * 16);
