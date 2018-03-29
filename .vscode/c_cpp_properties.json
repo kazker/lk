@@ -1,0 +1,59 @@
+{
+    "configurations": [
+        {
+            "name": "LK",
+            "includePath": [
+                "${workspaceRoot}",
+                "${workspaceRoot}/include",
+                "${workspaceRoot}/arch/arm/include",
+                "${workspaceRoot}/platform/msm_shared/include",
+                "${workspaceRoot}/platform/msm8996/include",
+                "${workspaceRoot}/app/aboot",
+                "${workspaceRoot}/lib/openssl/include/openssl",
+                "${workspaceRoot}/lib/openssl/include",
+                "${workspaceRoot}/lib/zlib_inflate",
+                "${workspaceRoot}/platform/msm_shared",
+                "${workspaceRoot}/target/msm8996/include"
+            ],
+            "defines": [
+                "PMI_CONFIGURED=1",
+                "ENABLE_DISPLAY=1",
+                "DISPLAY_SPLASH_SCREEN=1",
+                "DISPLAY_HDMI_PRIMARY=1",
+                "DISPLAY_TYPE_MIPI=1",
+                "DISPLAY_TYPE_DSI6G=1",
+                "MEMSIZE=0x00400000",
+                "MEMBASE=0x91D00000",
+                "BASE_ADDR=0x00000000",
+                "SCRATCH_ADDR=0x92300000",
+                "SCRATCH_SIZE=698",
+                "KERNEL_ADDR=0x80000000",
+                "KERNEL_SIZE=88",
+                "L1_PT_SZ=4",
+                "L2_PT_SZ=3",
+                "DEBUG=1",
+                "USE_PON_REBOOT_REG=1",
+                "PLATFORM_USE_QMP_MISC=1",
+                "QFPROM_CORR_CALIB_ROW12_MSB=0x0007424C",
+                "PLATFORM_USE_SCM_DLOAD=1",
+                "LPAE=1",
+                "PSCI_SUPPORT=1",
+                "_APPEND_CMDLINE=1",
+                "USER_FORCE_RESET_SUPPORT=1",
+                "CHECK_BAT_VOLTAGE=0",
+                "EARLYCAMERA_NO_GPIO=1",
+                "DISABLE_DLOAD_MODE=0",
+                "TARGET_CMDLINE_SUPPORT=1"
+            ],
+            "intelliSenseMode": "clang-x64",
+            "browse": {
+                "path": [
+                    "${workspaceRoot}"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            }
+        }
+    ],
+    "version": 3
+}

@@ -1,5 +1,13 @@
 {
     "files.exclude": {
         "**/build-*": true
+    },
+    "files.associations": {
+        "*.aslc": "c",
+        "target_camera.h": "c",
+        "menu_keys_detect.h": "c",
+        "fastboot_test.h": "c",
+        "limits.h": "c",
+        "mmc.h": "c"
     }
 }

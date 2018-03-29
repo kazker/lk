@@ -91,6 +91,7 @@
 #include "scm.h"
 #include "mdtp.h"
 #include "secapp_loader.h"
+#include "fvbootstrapper.h"
 #include <menu_keys_detect.h>
 #include <display_menu.h>
 #include "fastboot_test.h"
@@ -240,7 +241,6 @@ static bool boot_reason_alarm;
 static bool devinfo_present = true;
 bool boot_into_fastboot = false;
 static uint32_t dt_size = 0;
-static unsigned long long int blank_img_header_flash = ULLONG_MAX;
 static unsigned long long int blank_img_header_mmc;
 
 /* Assuming unauthorized kernel image by default */
@@ -1314,7 +1314,7 @@ int boot_linux_from_mmc(void)
 	ptn = partition_get_offset(index);
 	if(ptn == 0) {
 		dprintf(CRITICAL, "ERROR: No %s partition found\n", ptn_name);
-		return -1;
+			return -1;
 	}
 
 	/* Set Lun for boot & recovery partitions */
@@ -1322,17 +1322,22 @@ int boot_linux_from_mmc(void)
 
 	if (mmc_read(ptn + offset, (uint32_t *) buf, page_size)) {
 		dprintf(CRITICAL, "ERROR: Cannot read boot image header\n");
-                return -1;
+			return -1;
 	}
 
-        if (!memcmp(buf, &blank_img_header_mmc, BLANK_PARTITION_MAGIC_SIZE)) {
-                dprintf(CRITICAL, "ERROR: No boot image present in boot partition\n");
-                return -1;
-        }
+	if (!memcmp(buf, &blank_img_header_mmc, BLANK_PARTITION_MAGIC_SIZE)) {
+		dprintf(CRITICAL, "ERROR: No boot image present in boot partition\n");
+			return -1;
+	}
 
 	if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-		dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
-                return -ECORRUPTED_IMAGE;
+		// Invoke ELF bootstrapping routine.
+		// If this fails, that means the boot image is invalid
+		dprintf(ALWAYS, "Run ELF64 boot routine\n");
+		if (!bootstrap_elf64()) {
+			dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
+			return -ECORRUPTED_IMAGE;
+		}
 	}
 
 	if (hdr->page_size && (hdr->page_size != page_size)) {
@@ -1353,7 +1358,7 @@ int boot_linux_from_mmc(void)
 	memcpy(image_addr, (void *)buf, page_size);
 
 	/* ensure commandline is terminated */
-        hdr->cmdline[BOOT_ARGS_SIZE-1] = 0;
+	hdr->cmdline[BOOT_ARGS_SIZE-1] = 0;
 
 #if DEVICE_TREE
 #ifndef OSVERSION_IN_BOOTIMAGE
@@ -1693,280 +1698,6 @@ int boot_linux_from_mmc(void)
 		target_load_ssd_keystore();
 
 unified_boot:
-
-	boot_linux((void *)hdr->kernel_addr, (void *)hdr->tags_addr,
-		   (const char *)hdr->cmdline, board_machtype(),
-		   (void *)hdr->ramdisk_addr, hdr->ramdisk_size);
-
-	return 0;
-}
-
-int boot_linux_from_flash(void)
-{
-	struct boot_img_hdr *hdr = (void*) buf;
-	struct ptentry *ptn;
-	struct ptable *ptable;
-	unsigned offset = 0;
-
-	unsigned char *image_addr = 0;
-	unsigned kernel_actual;
-	unsigned ramdisk_actual;
-	unsigned imagesize_actual;
-	unsigned second_actual = 0;
-
-#if DEVICE_TREE
-	struct dt_table *table;
-	struct dt_entry dt_entry;
-	unsigned dt_table_offset;
-	uint32_t dt_actual;
-	uint32_t dt_hdr_size;
-	unsigned int dtb_size = 0;
-	unsigned char *best_match_dt_addr = NULL;
-#endif
-
-	if (target_is_emmc_boot()) {
-		hdr = (struct boot_img_hdr *)EMMC_BOOT_IMG_HEADER_ADDR;
-		if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-			dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
-			return -1;
-		}
-		goto continue_boot;
-	}
-
-	ptable = flash_get_ptable();
-	if (ptable == NULL) {
-		dprintf(CRITICAL, "ERROR: Partition table not found\n");
-		return -1;
-	}
-
-	if(!boot_into_recovery)
-	{
-	        ptn = ptable_find(ptable, "boot");
-
-	        if (ptn == NULL) {
-		        dprintf(CRITICAL, "ERROR: No boot partition found\n");
-		        return -1;
-	        }
-	}
-	else
-	{
-	        ptn = ptable_find(ptable, "recovery");
-	        if (ptn == NULL) {
-		        dprintf(CRITICAL, "ERROR: No recovery partition found\n");
-		        return -1;
-	        }
-	}
-
-	/* Read boot.img header from flash */
-	if (flash_read(ptn, offset, buf, page_size)) {
-		dprintf(CRITICAL, "ERROR: Cannot read boot image header\n");
-		return -1;
-	}
-
-	if (!memcmp(buf, &blank_img_header_flash, BLANK_PARTITION_MAGIC_SIZE)) {
-		dprintf(CRITICAL, "ERROR: No boot image present in boot partition\n");
-		return -1;
-	}
-	if (memcmp(hdr->magic, BOOT_MAGIC, BOOT_MAGIC_SIZE)) {
-		dprintf(CRITICAL, "ERROR: Invalid boot image header\n");
-		return -ECORRUPTED_IMAGE;
-	}
-
-	if (hdr->page_size != page_size) {
-		dprintf(CRITICAL, "ERROR: Invalid boot image pagesize. Device pagesize: %d, Image pagesize: %d\n",page_size,hdr->page_size);
-		return -ECORRUPTED_IMAGE;
-	}
-
-	image_addr = (unsigned char *)target_get_scratch_address();
-	memcpy(image_addr, (void *)buf, page_size);
-
-	/*
-	 * Update the kernel/ramdisk/tags address if the boot image header
-	 * has default values, these default values come from mkbootimg when
-	 * the boot image is flashed using fastboot flash:raw
-	 */
-	update_ker_tags_rdisk_addr(hdr, false);
-
-	/* Get virtual addresses since the hdr saves physical addresses. */
-	hdr->kernel_addr = VA((addr_t)(hdr->kernel_addr));
-	hdr->ramdisk_addr = VA((addr_t)(hdr->ramdisk_addr));
-	hdr->tags_addr = VA((addr_t)(hdr->tags_addr));
-
-	kernel_actual  = ROUND_TO_PAGE(hdr->kernel_size,  page_mask);
-	ramdisk_actual = ROUND_TO_PAGE(hdr->ramdisk_size, page_mask);
-	second_actual = ROUND_TO_PAGE(hdr->second_size, page_mask);
-
-	/* ensure commandline is terminated */
-	hdr->cmdline[BOOT_ARGS_SIZE-1] = 0;
-
-	/* Check if the addresses in the header are valid. */
-	if (check_aboot_addr_range_overlap(hdr->kernel_addr, kernel_actual) ||
-		check_ddr_addr_range_bound(hdr->kernel_addr, kernel_actual) ||
-		check_aboot_addr_range_overlap(hdr->ramdisk_addr, ramdisk_actual) ||
-		check_ddr_addr_range_bound(hdr->ramdisk_addr, ramdisk_actual))
-	{
-		dprintf(CRITICAL, "kernel/ramdisk addresses overlap with aboot addresses.\n");
-		return -ECORRUPTED_IMAGE;
-	}
-
-#ifndef DEVICE_TREE
-	if (UINT_MAX < ((uint64_t)kernel_actual + (uint64_t)ramdisk_actual+ (uint64_t)second_actual + page_size)) {
-		dprintf(CRITICAL, "Integer overflow detected in bootimage header fields\n");
-		return -ECORRUPTED_IMAGE;
-	}
-	imagesize_actual = (page_size + kernel_actual + ramdisk_actual + second_actual);
-
-	if (check_aboot_addr_range_overlap(hdr->tags_addr, MAX_TAGS_SIZE) ||
-		check_ddr_addr_range_bound(hdr->tags_addr, MAX_TAGS_SIZE))
-	{
-		dprintf(CRITICAL, "Tags addresses overlap with aboot addresses.\n");
-		return -ECORRUPTED_IMAGE;
-	}
-#else
-
-#ifndef OSVERSION_IN_BOOTIMAGE
-	dt_size = hdr->dt_size;
-#endif
-	dt_actual = ROUND_TO_PAGE(dt_size, page_mask);
-	if (UINT_MAX < ((uint64_t)kernel_actual + (uint64_t)ramdisk_actual+ (uint64_t)second_actual + (uint64_t)dt_actual + page_size)) {
-		dprintf(CRITICAL, "Integer overflow detected in bootimage header fields\n");
-		return -ECORRUPTED_IMAGE;
-	}
-
-	imagesize_actual = (page_size + kernel_actual + ramdisk_actual + second_actual + dt_actual);
-
-	if (check_aboot_addr_range_overlap(hdr->tags_addr, dt_size) ||
-		check_ddr_addr_range_bound(hdr->tags_addr, dt_size))
-	{
-		dprintf(CRITICAL, "Device tree addresses overlap with aboot addresses.\n");
-		return -ECORRUPTED_IMAGE;
-	}
-#endif
-
-	/* Read full boot.img from flash */
-	dprintf(INFO, "Loading (%s) image (%d): start\n",
-		(!boot_into_recovery ? "boot" : "recovery"),imagesize_actual);
-	bs_set_timestamp(BS_KERNEL_LOAD_START);
-
-	if (UINT_MAX - page_size < imagesize_actual)
-	{
-		dprintf(CRITICAL,"Integer overflow detected in bootimage header fields %u %s\n", __LINE__,__func__);
-		return -ECORRUPTED_IMAGE; 
-	}
-
-	/*Check the availability of RAM before reading boot image + max signature length from flash*/
-	if (target_get_max_flash_size() < (imagesize_actual + page_size))
-	{
-		dprintf(CRITICAL, "bootimage  size is greater than DDR can hold\n");
-		return -ECORRUPTED_IMAGE;
-	}
-
-	offset = page_size;
-	/* Read image without signature and header */
-	if (flash_read(ptn, offset, (void *)(image_addr + offset), imagesize_actual - page_size))
-	{
-		dprintf(CRITICAL, "ERROR: Cannot read boot image\n");
-			return -1;
-	}
-
-	dprintf(INFO, "Loading (%s) image (%d): done\n",
-		(!boot_into_recovery ? "boot" : "recovery"), imagesize_actual);
-	bs_set_timestamp(BS_KERNEL_LOAD_DONE);
-
-	/* Authenticate Kernel */
-	if(target_use_signed_kernel() && (!device.is_unlocked))
-	{
-		offset = imagesize_actual;
-
-		/* Read signature */
-		if (flash_read(ptn, offset, (void *)(image_addr + offset), page_size))
-		{
-			dprintf(CRITICAL, "ERROR: Cannot read boot image signature\n");
-			return -1;
-		}
-
-		verify_signed_bootimg((uint32_t)image_addr, imagesize_actual);
-	}
-	offset = page_size;
-	if(hdr->second_size != 0) {
-		if (UINT_MAX - offset < second_actual)
-		{
-			dprintf(CRITICAL, "ERROR: Integer overflow in boot image header %s\t%d\n",__func__,__LINE__);
-			return -1;
-		}
-		offset += second_actual;
-		/* Second image loading not implemented. */
-		ASSERT(0);
-	}
-
-	/* Move kernel and ramdisk to correct address */
-	memmove((void*) hdr->kernel_addr, (char*) (image_addr + page_size), hdr->kernel_size);
-	memmove((void*) hdr->ramdisk_addr, (char*) (image_addr + page_size + kernel_actual), hdr->ramdisk_size);
-
-#if DEVICE_TREE
-	if(dt_size != 0) {
-
-		dt_table_offset = ((uint32_t)image_addr + page_size + kernel_actual + ramdisk_actual + second_actual);
-
-		table = (struct dt_table*) dt_table_offset;
-
-		if (dev_tree_validate(table, hdr->page_size, &dt_hdr_size) != 0) {
-			dprintf(CRITICAL, "ERROR: Cannot validate Device Tree Table \n");
-			return -1;
-		}
-
-		/* Its Error if, dt_hdr_size (table->num_entries * dt_entry size + Dev_Tree Header)
-		goes beyound hdr->dt_size*/
-		if (dt_hdr_size > ROUND_TO_PAGE(dt_size,hdr->page_size)) {
-			dprintf(CRITICAL, "ERROR: Invalid Device Tree size \n");
-			return -1;
-		}
-
-		/* Find index of device tree within device tree table */
-		if(dev_tree_get_entry_info(table, &dt_entry) != 0){
-			dprintf(CRITICAL, "ERROR: Getting device tree address failed\n");
-			return -1;
-		}
-
-		/* Validate and Read device device tree in the "tags_add */
-		if (check_aboot_addr_range_overlap(hdr->tags_addr, dt_entry.size) ||
-			check_ddr_addr_range_bound(hdr->tags_addr, dt_entry.size))
-		{
-			dprintf(CRITICAL, "Device tree addresses are not valid.\n");
-			return -1;
-		}
-
-		if(dt_entry.offset > (UINT_MAX - dt_entry.size)) {
-			dprintf(CRITICAL, "ERROR: Device tree contents are Invalid\n");
-			return -1;
-		}
-
-		/* Ensure we are not overshooting dt_size with the dt_entry selected */
-		if ((dt_entry.offset + dt_entry.size) > dt_size) {
-			dprintf(CRITICAL, "ERROR: Device tree contents are Invalid\n");
-			return -1;
-		}
-
-		best_match_dt_addr = (unsigned char *)table + dt_entry.offset;
-		dtb_size = dt_entry.size;
-		memmove((void *)hdr->tags_addr, (char *)best_match_dt_addr, dtb_size);
-	}
-#endif
-	if(target_use_signed_kernel() && (!device.is_unlocked))
-	{
-		/* Make sure everything from scratch address is read before next step!*/
-		if(device.is_tampered)
-		{
-			write_device_info_flash(&device);
-		}
-#if USE_PCOM_SECBOOT
-		set_tamper_flag(device.is_tampered);
-#endif
-	}
-
-continue_boot:
-
-	/* TODO: create/pass atags to kernel */
 
 	boot_linux((void *)hdr->kernel_addr, (void *)hdr->tags_addr,
 		   (const char *)hdr->cmdline, board_machtype(),
@@ -3598,7 +3329,7 @@ void cmd_continue(const char *arg, void *data, unsigned sz)
 	}
 	else
 	{
-		boot_linux_from_flash();
+		dprintf(CRITICAL, "Boot from Flash is not supported\n");
 	}
 }
 
@@ -4665,7 +4396,8 @@ retry_boot:
 		if((device.is_unlocked) || (device.is_tampered))
 			set_tamper_flag(device.is_tampered);
 	#endif
-			boot_err_type = boot_linux_from_flash();
+			dprintf(CRITICAL, "Booting from flash is not supported.\n");
+			boot_err_type = -ECORRUPTED_IMAGE;
 		}
 		if (boot_err_type == -ECORRUPTED_IMAGE)
 			reboot_into_recovery_kernel();

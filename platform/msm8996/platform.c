@@ -74,8 +74,9 @@ static uint64_t ddr_start;
 static mmu_section_t default_mmu_section_table[] =
 {
 /*       Physical addr,    Virtual addr,     Mapping type ,              Size (in MB),            Flags */
-    {    0x00000000,        0x00000000,       MMU_L2_NS_SECTION_MAPPING,  512,                IOMAP_MEMORY},
+    {    0x00000000,        0x00000000,       MMU_L2_NS_SECTION_MAPPING,  512,                 IOMAP_MEMORY},
     {    MEMBASE,           MEMBASE,          MMU_L2_NS_SECTION_MAPPING,  (MEMSIZE / MB),      LK_MEMORY},
+	{	 KERNEL_ADDR, 		KERNEL_ADDR,      MMU_L2_NS_SECTION_MAPPING,  KERNEL_SIZE, 		   COMMON_MEMORY},
     {    MIPI_FB_ADDR,      MIPI_FB_ADDR,     MMU_L2_NS_SECTION_MAPPING,  42,                  COMMON_MEMORY},
     {    SCRATCH_ADDR,      SCRATCH_ADDR,     MMU_L2_NS_SECTION_MAPPING,  SCRATCH_SIZE,        SCRATCH_MEMORY},
     {    HDMI_FB_ADDR,      HDMI_FB_ADDR,     MMU_L2_NS_SECTION_MAPPING,  35,                  COMMON_MEMORY},
