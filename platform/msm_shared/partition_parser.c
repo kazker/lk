@@ -803,8 +803,9 @@ static void
 mbr_fill_name(struct partition_entry *partition_ent, unsigned int type)
 {
 	switch (type) {
-		memset(partition_ent->name, 0, MAX_GPT_NAME_SIZE);
 	case MBR_MODEM_TYPE:
+		memset(partition_ent->name, 0, MAX_GPT_NAME_SIZE);
+		break;
 	case MBR_MODEM_TYPE2:
 		/* if already assigned last name available then return */
 		if (!strcmp((const char *)vfat_partitions[vfat_count], "NONE"))
